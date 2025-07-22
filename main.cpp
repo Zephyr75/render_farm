@@ -2,10 +2,10 @@
 #include <stdio.h>  //        Remove "-fopenmp" for g++ version < 4.2
 #include <stdlib.h> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt
 
-// #include "crow.h"
 #include "crow_all.h"
 
-
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 struct Vec {        // Usage: time ./smallpt 5000 && xv image.ppm
   double x, y, z;   // position, also color (r,g,b)
@@ -128,34 +128,51 @@ Vec radiance(const Ray &r, int depth, unsigned short *Xi) {
                           radiance(Ray(x, tdir), depth, Xi) * Tr);
 }
 
-int render(int samples) {
-  int w = 1024, h = 768, samps = samples; // # samples
-  Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm()); // cam pos, dir
-  Vec cx = Vec(w * .5135 / h), cy = (cx % cam.d).norm() * .5135, r, *c = new Vec[w * h];
 
-  #pragma omp parallel for schedule(dynamic, 1) private(r) // OpenMP
-  for (int y = 0; y < h; y++) {                          // Loop over image rows
-    fprintf(stderr, "\rRendering (%d spp) %5.2f%%", samps * 4,
-            100. * y / (h - 1));
-    for (unsigned short x = 0, Xi[3] = {0, 0, static_cast<unsigned short>(y * y * y)}; x < w; x++) // Loop cols
-      for (int sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)                                    // 2x2 subpixel rows
-        for (int sx = 0; sx < 2; sx++, r = Vec()) { // 2x2 subpixel cols
-          for (int s = 0; s < samps; s++) {
-            double r1 = 2 * erand48(Xi), dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
-            double r2 = 2 * erand48(Xi), dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
-            Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5) + cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
-            r = r + radiance(Ray(cam.o + d * 140, d.norm()), 0, Xi) * (1. / samps);
-          } // Camera rays are pushed ^^^^^ forward to start in interior
-          c[i] = c[i] + Vec(clamp(r.x), clamp(r.y), clamp(r.z)) * .25;
-        }
-  }
+int render(int samples, std::vector<unsigned char>& png_buffer) {
+    int w = 1024, h = 768, samps = samples;
+    Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());
+    Vec cx = Vec(w * .5135 / h), cy = (cx % cam.d).norm() * .5135, r, *c = new Vec[w * h];
 
-  FILE *f = fopen("image.ppm", "w"); // Write image to PPM file.
-  fprintf(f, "P3\n%d %d\n%d\n", w, h, 255);
-  for (int i = 0; i < w * h; i++) {
-    fprintf(f, "%d %d %d ", toInt(c[i].x), toInt(c[i].y), toInt(c[i].z));
-  }
-  return 0;
+    #pragma omp parallel for schedule(dynamic, 1) private(r)
+    for (int y = 0; y < h; y++) {
+        fprintf(stderr, "\rRendering (%d spp) %5.2f%%", samps * 4, 100. * y / (h - 1));
+        for (unsigned short x = 0, Xi[3] = {0, 0, static_cast<unsigned short>(y * y * y)}; x < w; x++)
+            for (int sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)
+                for (int sx = 0; sx < 2; sx++, r = Vec()) {
+                    for (int s = 0; s < samps; s++) {
+                        double r1 = 2 * erand48(Xi), dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
+                        double r2 = 2 * erand48(Xi), dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
+                        Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5) +
+                                cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
+                        r = r + radiance(Ray(cam.o + d * 140, d.norm()), 0, Xi) * (1. / samps);
+                    }
+                    c[i] = c[i] + Vec(clamp(r.x), clamp(r.y), clamp(r.z)) * .25;
+                }
+    }
+
+    std::vector<unsigned char> image(w * h * 3);
+    for (int i = 0; i < w * h; i++) {
+        image[i * 3 + 0] = toInt(c[i].x);
+        image[i * 3 + 1] = toInt(c[i].y);
+        image[i * 3 + 2] = toInt(c[i].z);
+    }
+
+    int out_len = 0;
+    unsigned char* out_png = stbi_write_png_to_mem(
+        image.data(), w * 3, w, h, 3, &out_len
+    );
+
+    if (out_png && out_len > 0) {
+        png_buffer.assign(out_png, out_png + out_len);
+        STBIW_FREE(out_png);
+    } else {
+        delete[] c;
+        return -1;  // Error occurred
+    }
+
+    delete[] c;
+    return 0;
 }
 
 
@@ -165,11 +182,36 @@ int main()
     crow::SimpleApp app; //define your crow application
 
     //define your endpoint at the root directory
-    CROW_ROUTE(app, "/")([](){
-        return render(10);
-        // return "Hello world";
+    
+    CROW_ROUTE(app, "/")([](const crow::request& req){
+        int samples = 10;
+        if (req.url_params.get("samples")) {
+            samples = std::max(1, atoi(req.url_params.get("samples")));
+        }
+
+        std::vector<unsigned char> png_buffer;
+        render(samples, png_buffer);
+
+        std::string base64_image = crow::utility::base64encode(
+            reinterpret_cast<const char*>(png_buffer.data()),
+            png_buffer.size()
+        );
+
+        std::ostringstream html;
+        html << "<html><body>"
+             << "<h1>Rendered Image (" << samples << " samples)</h1>"
+             << "<img src='data:image/png;base64," << base64_image << "' />"
+             << "</body></html>";
+
+        crow::response res;
+        res.code = 200;
+        res.body = html.str();
+        res.set_header("Content-Type", "text/html");
+
+        return res;
     });
 
+  
     //set the port, set the app to run on multiple threads, and run the app
     // app.port(18080).multithreaded().run();
     app.port(18080).run();
