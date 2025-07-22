@@ -2,8 +2,7 @@
 #include <stdio.h>  //        Remove "-fopenmp" for g++ version < 4.2
 #include <stdlib.h> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt
 #include <sstream>
-#include <fstream>
-#include <iomanip>
+#include <vector>
 
 #include "crow_all.h"
 
@@ -54,29 +53,15 @@ struct Sphere {
   }
 };
 
-Sphere spheres[] = {
-    // Scene: radius, position, emission, color, material
-    Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25),
-           DIFF), // Left
-    Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75),
-           DIFF),                                                     // Rght
-    Sphere(1e5, Vec(50, 40.8, 1e5), Vec(), Vec(.75, .75, .75), DIFF), // Back
-    Sphere(1e5, Vec(50, 40.8, -1e5 + 170), Vec(), Vec(), DIFF),       // Frnt
-    Sphere(1e5, Vec(50, 1e5, 81.6), Vec(), Vec(.75, .75, .75), DIFF), // Botm
-    Sphere(1e5, Vec(50, -1e5 + 81.6, 81.6), Vec(), Vec(.75, .75, .75),
-           DIFF),                                                      // Top
-    Sphere(16.5, Vec(27, 16.5, 47), Vec(), Vec(1, 1, 1) * .999, SPEC), // Mirr
-    Sphere(16.5, Vec(73, 16.5, 78), Vec(), Vec(1, 1, 1) * .999, REFR), // Glas
-    Sphere(600, Vec(50, 681.6 - .27, 81.6), Vec(12, 12, 12), Vec(),
-           DIFF) // Lite
-};
+// Global spheres array - will be updated with parameters
+std::vector<Sphere> spheres;
 
 inline double clamp(double x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
 inline int toInt(double x) { return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }
 
 inline bool intersect(const Ray &r, double &t, int &id) {
-  double n = sizeof(spheres) / sizeof(Sphere), d, inf = t = 1e20;
+  double n = spheres.size(), d, inf = t = 1e20;
   for (int i = int(n); i--;)
     if ((d = spheres[i].intersect(r)) && d < t) {
       t = d;
@@ -131,16 +116,36 @@ Vec radiance(const Ray &r, int depth, unsigned short *Xi) {
                           radiance(Ray(x, tdir), depth, Xi) * Tr);
 }
 
-std::string render(int samples) {
+void setupScene(double sphere1_x, double sphere1_y, double sphere1_z,
+                double sphere2_x, double sphere2_y, double sphere2_z) {
+    spheres.clear();
+    
+    // Scene walls (unchanged)
+    spheres.emplace_back(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25), DIFF); // Left
+    spheres.emplace_back(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75), DIFF); // Right
+    spheres.emplace_back(1e5, Vec(50, 40.8, 1e5), Vec(), Vec(.75, .75, .75), DIFF); // Back
+    spheres.emplace_back(1e5, Vec(50, 40.8, -1e5 + 170), Vec(), Vec(), DIFF); // Front
+    spheres.emplace_back(1e5, Vec(50, 1e5, 81.6), Vec(), Vec(.75, .75, .75), DIFF); // Bottom
+    spheres.emplace_back(1e5, Vec(50, -1e5 + 81.6, 81.6), Vec(), Vec(.75, .75, .75), DIFF); // Top
+    
+    // Parametrized center spheres
+    spheres.emplace_back(16.5, Vec(sphere1_x, sphere1_y, sphere1_z), Vec(), Vec(1, 1, 1) * .999, SPEC); // Mirror sphere
+    spheres.emplace_back(16.5, Vec(sphere2_x, sphere2_y, sphere2_z), Vec(), Vec(1, 1, 1) * .999, REFR); // Glass sphere
+    
+    // Light (unchanged)
+    spheres.emplace_back(600, Vec(50, 681.6 - .27, 81.6), Vec(12, 12, 12), Vec(), DIFF); // Light
+}
+
+bool renderToPNG(int samples, std::vector<unsigned char>& png_buffer) {
     int w = 1024, h = 768, samps = samples;
     Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());
     Vec cx = Vec(w * .5135 / h), cy = (cx % cam.d).norm() * .5135, r, *c = new Vec[w * h];
 
-    printf("Rendering with %d samples...\n", samps);
+    fprintf(stderr, "Rendering %dx%d with %d samples...\n", w, h, samps);
 
     #pragma omp parallel for schedule(dynamic, 1) private(r)
     for (int y = 0; y < h; y++) {
-        fprintf(stderr, "\rRendering (%d spp) %5.2f%%", samps * 4, 100. * y / (h - 1));
+        fprintf(stderr, "\rProgress: %5.2f%%", 100. * y / (h - 1));
         for (unsigned short x = 0, Xi[3] = {0, 0, static_cast<unsigned short>(y * y * y)}; x < w; x++)
             for (int sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)
                 for (int sx = 0; sx < 2; sx++, r = Vec()) {
@@ -156,7 +161,7 @@ std::string render(int samples) {
     }
     fprintf(stderr, "\nRendering complete!\n");
 
-    // Prepare RGB data
+    // Convert to RGB
     std::vector<unsigned char> image(w * h * 3);
     for (int i = 0; i < w * h; i++) {
         image[i * 3 + 0] = toInt(c[i].x);
@@ -164,117 +169,115 @@ std::string render(int samples) {
         image[i * 3 + 2] = toInt(c[i].z);
     }
 
-    // Generate unique filename with timestamp
-    auto now = std::time(nullptr);
-    std::ostringstream filename_stream;
-    filename_stream << "render_" << samples << "spp_" << now << ".png";
-    std::string filename = filename_stream.str();
+    // Convert to PNG in memory
+    int out_len = 0;
+    unsigned char* out_png = stbi_write_png_to_mem(
+        image.data(), w * 3, w, h, 3, &out_len
+    );
 
-    // Save PNG file locally
-    if (stbi_write_png(filename.c_str(), w, h, 3, image.data(), w * 3)) {
-        printf("Image saved as: %s\n", filename.c_str());
-    } else {
-        printf("Failed to save image: %s\n", filename.c_str());
-        delete[] c;
-        return "";
+    bool success = false;
+    if (out_png && out_len > 0) {
+        png_buffer.assign(out_png, out_png + out_len);
+        STBIW_FREE(out_png);
+        success = true;
     }
 
     delete[] c;
-    return filename;
+    return success;
 }
 
 int main() {
     crow::SimpleApp app;
 
-    // Serve static files (images)
-    CROW_ROUTE(app, "/images/<string>")([](const std::string& filename) {
-        std::ifstream file(filename, std::ios::binary);
-        if (!file.is_open()) {
-            return crow::response(404, "File not found");
-        }
-        
-        std::ostringstream buffer;
-        buffer << file.rdbuf();
-        std::string content = buffer.str();
-        
-        crow::response res(200, content);
-        res.set_header("Content-Type", "image/png");
-        res.set_header("Cache-Control", "public, max-age=3600");
-        return res;
-    });
+    // Main endpoint - returns PNG image directly
+    CROW_ROUTE(app, "/render")([](const crow::request& req) {
+        // Parse parameters with defaults
+        int samples = 25;
+        double sphere1_x = 27, sphere1_y = 16.5, sphere1_z = 47;    // Mirror sphere default
+        double sphere2_x = 73, sphere2_y = 16.5, sphere2_z = 78;    // Glass sphere default
 
-    // Main rendering endpoint
-    CROW_ROUTE(app, "/")([](const crow::request& req) {
-        int samples = 10;
+        // Parse samples parameter
         if (req.url_params.get("samples")) {
             samples = std::max(1, std::min(1000, atoi(req.url_params.get("samples"))));
         }
 
-        std::string filename = render(samples);
+        // Parse sphere1 coordinates (mirror sphere)
+        if (req.url_params.get("s1x")) sphere1_x = atof(req.url_params.get("s1x"));
+        if (req.url_params.get("s1y")) sphere1_y = atof(req.url_params.get("s1y"));
+        if (req.url_params.get("s1z")) sphere1_z = atof(req.url_params.get("s1z"));
+
+        // Parse sphere2 coordinates (glass sphere)
+        if (req.url_params.get("s2x")) sphere2_x = atof(req.url_params.get("s2x"));
+        if (req.url_params.get("s2y")) sphere2_y = atof(req.url_params.get("s2y"));
+        if (req.url_params.get("s2z")) sphere2_z = atof(req.url_params.get("s2z"));
+
+        // Clamp coordinates to reasonable scene bounds
+        sphere1_x = std::max(20.0, std::min(80.0, sphere1_x));
+        sphere1_y = std::max(16.5, std::min(65.0, sphere1_y));
+        sphere1_z = std::max(30.0, std::min(120.0, sphere1_z));
         
-        if (filename.empty()) {
-            return crow::response(500, "Failed to render image");
+        sphere2_x = std::max(20.0, std::min(80.0, sphere2_x));
+        sphere2_y = std::max(16.5, std::min(65.0, sphere2_y));
+        sphere2_z = std::max(30.0, std::min(120.0, sphere2_z));
+
+        printf("Rendering: samples=%d, sphere1=(%.1f,%.1f,%.1f), sphere2=(%.1f,%.1f,%.1f)\n",
+               samples, sphere1_x, sphere1_y, sphere1_z, sphere2_x, sphere2_y, sphere2_z);
+
+        // Setup scene with new coordinates
+        setupScene(sphere1_x, sphere1_y, sphere1_z, sphere2_x, sphere2_y, sphere2_z);
+
+        // Render to PNG buffer
+        std::vector<unsigned char> png_buffer;
+        if (!renderToPNG(samples, png_buffer)) {
+            return crow::response(500, "Rendering failed");
         }
 
-        // Create HTML response with proper image display
-        std::ostringstream html;
-        html << "<!DOCTYPE html>\n"
-             << "<html lang=\"en\">\n"
-             << "<head>\n"
-             << "    <meta charset=\"UTF-8\">\n"
-             << "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-             << "    <title>Path Tracer Render</title>\n"
-             << "    <style>\n"
-             << "        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }\n"
-             << "        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }\n"
-             << "        h1 { color: #333; text-align: center; margin-bottom: 30px; }\n"
-             << "        .image-container { text-align: center; margin: 30px 0; }\n"
-             << "        img { max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }\n"
-             << "        .controls { text-align: center; margin: 30px 0; }\n"
-             << "        .controls a { display: inline-block; padding: 10px 20px; margin: 0 10px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; transition: background 0.3s; }\n"
-             << "        .controls a:hover { background: #0056b3; }\n"
-             << "        .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }\n"
-             << "        .download { background: #28a745; }\n"
-             << "        .download:hover { background: #218838; }\n"
-             << "    </style>\n"
-             << "</head>\n"
-             << "<body>\n"
-             << "    <div class=\"container\">\n"
-             << "        <h1>Path Tracer Render</h1>\n"
-             << "        <div class=\"info\">\n"
-             << "            <strong>Samples:</strong> " << samples << " | "
-             << "            <strong>Resolution:</strong> 1024x768 | "
-             << "            <strong>File:</strong> " << filename << "\n"
-             << "        </div>\n"
-             << "        <div class=\"image-container\">\n"
-             << "            <img src=\"/images/" << filename << "\" alt=\"Rendered scene with " << samples << " samples\" loading=\"lazy\" />\n"
-             << "        </div>\n"
-             << "        <div class=\"controls\">\n"
-             << "            <a href=\"?samples=5\">5 samples (fast)</a>\n"
-             << "            <a href=\"?samples=25\">25 samples (medium)</a>\n"
-             << "            <a href=\"?samples=100\">100 samples (high)</a>\n"
-             << "            <a href=\"?samples=500\">500 samples (very high)</a>\n"
-             << "        </div>\n"
-             << "        <div class=\"controls\">\n"
-             << "            <a href=\"/images/" << filename << "\" download=\"" << filename << "\" class=\"download\">Download Image</a>\n"
-             << "        </div>\n"
-             << "    </div>\n"
-             << "</body>\n"
-             << "</html>";
-
-        crow::response res(200, html.str());
-        res.set_header("Content-Type", "text/html; charset=utf-8");
+        // Return PNG image directly
+        crow::response res(200);
+        res.body = std::string(png_buffer.begin(), png_buffer.end());
+        res.set_header("Content-Type", "image/png");
+        res.set_header("Content-Length", std::to_string(png_buffer.size()));
+        res.set_header("Cache-Control", "no-cache"); // Force fresh renders
         return res;
     });
 
-    // Health check endpoint
+    // Help endpoint
+    CROW_ROUTE(app, "/")([](const crow::request& req) {
+        std::string help = R"(Path Tracer API
+
+Usage: GET /render with optional parameters:
+
+Parameters:
+- samples: Number of samples (1-1000, default: 25)
+- s1x, s1y, s1z: Mirror sphere position (default: 27, 16.5, 47)
+- s2x, s2y, s2z: Glass sphere position (default: 73, 16.5, 78)
+
+Examples:
+/render
+/render?samples=100
+/render?samples=50&s1x=40&s1y=20&s1z=50
+/render?samples=25&s1x=30&s1y=16.5&s1z=60&s2x=70&s2y=16.5&s2z=90
+
+Coordinate bounds:
+- X: 20-80 (scene width)
+- Y: 16.5-65 (sphere radius to ceiling)
+- Z: 30-120 (scene depth)
+
+Returns: PNG image directly
+)";
+        return crow::response(200, help);
+    });
+
+    // Health check
     CROW_ROUTE(app, "/health")([]{
         return crow::response(200, "OK");
     });
 
-    std::cout << "Starting path tracer server on port 18080...\n";
-    std::cout << "Visit http://localhost:18080 to render images\n";
-    std::cout << "Use ?samples=N parameter to control quality (e.g., ?samples=50)\n";
+    std::cout << "Path Tracer API Server starting on port 18080\n";
+    std::cout << "Usage:\n";
+    std::cout << "  GET /render?samples=N&s1x=X&s1y=Y&s1z=Z&s2x=X&s2y=Y&s2z=Z\n";
+    std::cout << "  GET / (for help)\n";
+    std::cout << "\nExample: curl 'http://localhost:18080/render?samples=50&s1x=40&s2x=60' > output.png\n\n";
     
     app.port(18080).multithreaded().run();
     return 0;
