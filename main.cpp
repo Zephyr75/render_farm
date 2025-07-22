@@ -1,6 +1,9 @@
 #include <math.h>   // smallpt, a Path Tracer by Kevin Beason, 2008
 #include <stdio.h>  //        Remove "-fopenmp" for g++ version < 4.2
 #include <stdlib.h> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt
+#include <sstream>
+#include <fstream>
+#include <iomanip>
 
 #include "crow_all.h"
 
@@ -128,11 +131,12 @@ Vec radiance(const Ray &r, int depth, unsigned short *Xi) {
                           radiance(Ray(x, tdir), depth, Xi) * Tr);
 }
 
-
-int render(int samples, std::vector<unsigned char>& png_buffer) {
+std::string render(int samples) {
     int w = 1024, h = 768, samps = samples;
     Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());
     Vec cx = Vec(w * .5135 / h), cy = (cx % cam.d).norm() * .5135, r, *c = new Vec[w * h];
+
+    printf("Rendering with %d samples...\n", samps);
 
     #pragma omp parallel for schedule(dynamic, 1) private(r)
     for (int y = 0; y < h; y++) {
@@ -150,7 +154,9 @@ int render(int samples, std::vector<unsigned char>& png_buffer) {
                     c[i] = c[i] + Vec(clamp(r.x), clamp(r.y), clamp(r.z)) * .25;
                 }
     }
+    fprintf(stderr, "\nRendering complete!\n");
 
+    // Prepare RGB data
     std::vector<unsigned char> image(w * h * 3);
     for (int i = 0; i < w * h; i++) {
         image[i * 3 + 0] = toInt(c[i].x);
@@ -158,61 +164,118 @@ int render(int samples, std::vector<unsigned char>& png_buffer) {
         image[i * 3 + 2] = toInt(c[i].z);
     }
 
-    int out_len = 0;
-    unsigned char* out_png = stbi_write_png_to_mem(
-        image.data(), w * 3, w, h, 3, &out_len
-    );
+    // Generate unique filename with timestamp
+    auto now = std::time(nullptr);
+    std::ostringstream filename_stream;
+    filename_stream << "render_" << samples << "spp_" << now << ".png";
+    std::string filename = filename_stream.str();
 
-    if (out_png && out_len > 0) {
-        png_buffer.assign(out_png, out_png + out_len);
-        STBIW_FREE(out_png);
+    // Save PNG file locally
+    if (stbi_write_png(filename.c_str(), w, h, 3, image.data(), w * 3)) {
+        printf("Image saved as: %s\n", filename.c_str());
     } else {
+        printf("Failed to save image: %s\n", filename.c_str());
         delete[] c;
-        return -1;  // Error occurred
+        return "";
     }
 
     delete[] c;
-    return 0;
+    return filename;
 }
 
+int main() {
+    crow::SimpleApp app;
 
-
-int main()
-{
-    crow::SimpleApp app; //define your crow application
-
-    //define your endpoint at the root directory
-    
-    CROW_ROUTE(app, "/")([](const crow::request& req){
-        int samples = 10;
-        if (req.url_params.get("samples")) {
-            samples = std::max(1, atoi(req.url_params.get("samples")));
+    // Serve static files (images)
+    CROW_ROUTE(app, "/images/<string>")([](const std::string& filename) {
+        std::ifstream file(filename, std::ios::binary);
+        if (!file.is_open()) {
+            return crow::response(404, "File not found");
         }
-
-        std::vector<unsigned char> png_buffer;
-        render(samples, png_buffer);
-
-        std::string base64_image = crow::utility::base64encode(
-            reinterpret_cast<const char*>(png_buffer.data()),
-            png_buffer.size()
-        );
-
-        std::ostringstream html;
-        html << "<html><body>"
-             << "<h1>Rendered Image (" << samples << " samples)</h1>"
-             << "<img src='data:image/png;base64," << base64_image << "' />"
-             << "</body></html>";
-
-        crow::response res;
-        res.code = 200;
-        res.body = html.str();
-        res.set_header("Content-Type", "text/html");
-
+        
+        std::ostringstream buffer;
+        buffer << file.rdbuf();
+        std::string content = buffer.str();
+        
+        crow::response res(200, content);
+        res.set_header("Content-Type", "image/png");
+        res.set_header("Cache-Control", "public, max-age=3600");
         return res;
     });
 
-  
-    //set the port, set the app to run on multiple threads, and run the app
-    // app.port(18080).multithreaded().run();
-    app.port(18080).run();
+    // Main rendering endpoint
+    CROW_ROUTE(app, "/")([](const crow::request& req) {
+        int samples = 10;
+        if (req.url_params.get("samples")) {
+            samples = std::max(1, std::min(1000, atoi(req.url_params.get("samples"))));
+        }
+
+        std::string filename = render(samples);
+        
+        if (filename.empty()) {
+            return crow::response(500, "Failed to render image");
+        }
+
+        // Create HTML response with proper image display
+        std::ostringstream html;
+        html << "<!DOCTYPE html>\n"
+             << "<html lang=\"en\">\n"
+             << "<head>\n"
+             << "    <meta charset=\"UTF-8\">\n"
+             << "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+             << "    <title>Path Tracer Render</title>\n"
+             << "    <style>\n"
+             << "        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }\n"
+             << "        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }\n"
+             << "        h1 { color: #333; text-align: center; margin-bottom: 30px; }\n"
+             << "        .image-container { text-align: center; margin: 30px 0; }\n"
+             << "        img { max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }\n"
+             << "        .controls { text-align: center; margin: 30px 0; }\n"
+             << "        .controls a { display: inline-block; padding: 10px 20px; margin: 0 10px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; transition: background 0.3s; }\n"
+             << "        .controls a:hover { background: #0056b3; }\n"
+             << "        .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }\n"
+             << "        .download { background: #28a745; }\n"
+             << "        .download:hover { background: #218838; }\n"
+             << "    </style>\n"
+             << "</head>\n"
+             << "<body>\n"
+             << "    <div class=\"container\">\n"
+             << "        <h1>Path Tracer Render</h1>\n"
+             << "        <div class=\"info\">\n"
+             << "            <strong>Samples:</strong> " << samples << " | "
+             << "            <strong>Resolution:</strong> 1024x768 | "
+             << "            <strong>File:</strong> " << filename << "\n"
+             << "        </div>\n"
+             << "        <div class=\"image-container\">\n"
+             << "            <img src=\"/images/" << filename << "\" alt=\"Rendered scene with " << samples << " samples\" loading=\"lazy\" />\n"
+             << "        </div>\n"
+             << "        <div class=\"controls\">\n"
+             << "            <a href=\"?samples=5\">5 samples (fast)</a>\n"
+             << "            <a href=\"?samples=25\">25 samples (medium)</a>\n"
+             << "            <a href=\"?samples=100\">100 samples (high)</a>\n"
+             << "            <a href=\"?samples=500\">500 samples (very high)</a>\n"
+             << "        </div>\n"
+             << "        <div class=\"controls\">\n"
+             << "            <a href=\"/images/" << filename << "\" download=\"" << filename << "\" class=\"download\">Download Image</a>\n"
+             << "        </div>\n"
+             << "    </div>\n"
+             << "</body>\n"
+             << "</html>";
+
+        crow::response res(200, html.str());
+        res.set_header("Content-Type", "text/html; charset=utf-8");
+        return res;
+    });
+
+    // Health check endpoint
+    CROW_ROUTE(app, "/health")([]{
+        return crow::response(200, "OK");
+    });
+
+    std::cout << "Starting path tracer server on port 18080...\n";
+    std::cout << "Visit http://localhost:18080 to render images\n";
+    std::cout << "Use ?samples=N parameter to control quality (e.g., ?samples=50)\n";
+    
+    app.port(18080).multithreaded().run();
+    return 0;
 }
