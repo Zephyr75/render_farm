@@ -1,55 +1,64 @@
-# Use Ubuntu as base image for better development tool support
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
-# Set environment variables to avoid interactive prompts
+ARG BOOST_VERSION=1.87.0
+ARG CMAKE_VERSION=3.31.4
+ARG NUM_JOBS=8
+
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=UTC
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    g++ \
-    cmake \
-    wget \
-    curl \
-    git \
-    libssl-dev \
-    zlib1g-dev \
-    libomp-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install package dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        software-properties-common \
+        autoconf \
+        automake \
+        libtool \
+        pkg-config \
+        ca-certificates \
+        libssl-dev \
+        wget \
+        git \
+        curl \
+        language-pack-en \
+        locales \
+        locales-all \
+        vim \
+        gdb \
+        valgrind && \
+    apt-get clean
 
-# Set working directory
+# System locale
+# Important for UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US.UTF-8
+
+# Install CMake
+RUN cd /tmp && \
+    wget https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}.tar.gz && \
+    tar xzf cmake-${CMAKE_VERSION}.tar.gz && \
+    cd cmake-${CMAKE_VERSION} && \
+    ./bootstrap && \
+    make -j${NUM_JOBS} && \
+    make install && \
+    rm -rf /tmp/*
+
+# Install Boost
+# https://www.boost.org/doc/libs/1_80_0/more/getting_started/unix-variants.html
+RUN cd /tmp && \
+    BOOST_VERSION_MOD=$(echo $BOOST_VERSION | tr . _) && \
+    wget https://archives.boost.io/release/${BOOST_VERSION}/source/boost_${BOOST_VERSION_MOD}.tar.bz2 && \
+    tar --bzip2 -xf boost_${BOOST_VERSION_MOD}.tar.bz2 && \
+    cd boost_${BOOST_VERSION_MOD} && \
+    ./bootstrap.sh --prefix=/usr/local && \
+    ./b2 install && \
+    rm -rf /tmp/*
+
 WORKDIR /app
 
-# Copy the source code
 COPY . .
 
-# Create a build script to compile the application
-RUN echo '#!/bin/bash\n\
-g++ -O3 -fopenmp -std=c++14 \\\n\
-    -pthread \\\n\
-    -I. \\\n\
-    main.cpp \\\n\
-    -o pathtracer \\\n\
-    -lssl -lcrypto -lz\n\
-' > build.sh && chmod +x build.sh
+RUN g++ ./main.cpp -O3 -fopenmp -DCROW_USE_BOOST
 
-# Compile the application
-RUN ./build.sh
-
-# Expose the port
-EXPOSE 18080
-
-# Create a non-root user for security
-RUN useradd -m -u 1000 pathtracer && \
-    chown -R pathtracer:pathtracer /app
-
-# Switch to non-root user
-USER pathtracer
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:18080/health || exit 1
-
-# Run the application
-CMD ["./pathtracer"]
+CMD ["./a.out"]
