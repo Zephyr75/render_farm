@@ -1,0 +1,9 @@
+Path Tracer API Server starting on port 18080
+Usage:
+  GET /render?samples=N&s1x=X&s1y=Y&s1z=Z&s2x=X&s2y=Y&s2z=Z
+  GET / (for help)
+
+Example: curl 'http://localhost:18080/render?samples=50&s1x=40&s2x=60' > output.png
+
+(2025-07-22 14:50:59) [ERROR   ] Failed to bind to 0.0.0.0:0 - Address already in use
+(2025-07-22 14:50:59) [ERROR   ] Server startup failed. Aborting run().
