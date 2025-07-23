@@ -16,7 +16,6 @@ kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-passwor
 # forward grafana to be accessible outside cluster (create external gateway with Nodeport) : admin / admin
 kubectl port-forward pod/grafana 3000:3000 -n openfaas
 
-
 # apply gateway timeouts patch to gateway deployment
 kubectl patch deployment gateway -n openfaas --patch-file gateway-timeouts-patch.yaml
 
