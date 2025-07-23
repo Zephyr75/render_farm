@@ -1,4 +1,4 @@
-FROM ghcr.io/openfaas/classic-watchdog:0.3.3 AS watchdog
+FROM ghcr.io/openfaas/of-watchdog:0.9.15 AS watchdog
 
 FROM ubuntu:24.04
 
@@ -77,10 +77,10 @@ RUN chown -R app:app /home/app
 
 USER app
 
-# OpenFaaS environment variables
-# Point fprocess to your compiled binary
-ENV fprocess="./a.out"
-# Set to true to see request in function logs
+# OpenFaaS environment variables for HTTP mode
+ENV fprocess="./function"
+ENV mode="http"
+ENV upstream_url="http://127.0.0.1:8082"
 ENV write_debug="false"
 
 EXPOSE 8080

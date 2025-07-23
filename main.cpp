@@ -273,12 +273,13 @@ Returns: PNG image directly
         return crow::response(200, "OK");
     });
 
-    std::cout << "Path Tracer API Server starting on port 18080\n";
+    std::cout << "Path Tracer API Server starting on port 8082\n";
     std::cout << "Usage:\n";
     std::cout << "  GET /render?samples=N&s1x=X&s1y=Y&s1z=Z&s2x=X&s2y=Y&s2z=Z\n";
     std::cout << "  GET / (for help)\n";
-    std::cout << "\nExample: curl 'http://localhost:18080/render?samples=50&s1x=40&s2x=60' > output.png\n\n";
+    std::cout << "\nExample: curl 'http://0.0.0.0:8082/render?samples=50&s1x=40&s2x=60' > output.png\n\n";
     
-    app.port(18080).multithreaded().run();
+    // app.port(8082).multithreaded().run();
+    app.port(8082).multithreaded().run();
     return 0;
 }
