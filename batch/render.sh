@@ -23,7 +23,7 @@ generate() {
   OUTPUT_FILE="x_${S1X}.png"
   URL="http://localhost:8080/function/render/render?samples=${SAMPLES}&s1x=${S1X}&s1y=${S1Y}&s1z=${S1Z}&s2x=${S2X}&s2y=${S2Y}&s2z=${S2Z}"
   echo "Rendering s1x=$S1X -> $OUTPUT_FILE"
-  curl -s --http1.1 "$URL" -o "$OUTPUT_FILE"
+  curl -s --http1.1 --max-time 1000 "$URL" -o "$OUTPUT_FILE"
 }
 
 export -f generate
