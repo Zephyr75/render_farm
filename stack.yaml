@@ -1,0 +1,17 @@
+provider:
+  name: openfaas
+functions:
+  render:
+    image: zephyr75/render_farm:latest
+    skip_build: true
+    environment:
+      exec_timeout: "1000s"     # hard timeout for function execution
+      read_timeout: "1000s"     # allow up to 10m to read the entire request
+      write_timeout: "1000s"    # allow up to 10m to write the full response
+      OMP_NUM_THREADS: "4"  # Adjust based on your container resources
+    limits:
+      memory: "2Gi"  # Increase memory for larger renders
+      cpu: "2000m"   # Allocate more CPU cores
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"

@@ -83,6 +83,10 @@ ENV mode="http"
 ENV upstream_url="http://127.0.0.1:8082"
 ENV write_debug="false"
 
+ENV exec_timeout="1000s"
+ENV write_timeout="1000s"
+ENV read_timeout="1000s"
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=3s CMD [ -e /tmp/.lock ] || exit 1
