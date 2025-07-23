@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set parameters
-SAMPLES=15
+SAMPLES=50
 S1Y=20
 S1Z=50
 S2X=60
