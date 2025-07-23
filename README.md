@@ -7,8 +7,15 @@ arkade install openfaas
 # check that gateway is ready
 kubectl rollout status -n openfaas deploy/gateway 
 
-# forward gateway to be accessible outside cluster (create external gateway with Nodeport)
+# forward gateway to be accessible outside cluster (create external gateway with Nodeport) : admin / password (see below)
 kubectl port-forward svc/gateway -n openfaas 8080:8080
+
+# get password for ui access
+kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode; echo
+
+# forward grafana to be accessible outside cluster (create external gateway with Nodeport) : admin / admin
+kubectl port-forward pod/grafana 3000:3000 -n openfaas
+
 
 # apply gateway timeouts patch to gateway deployment
 kubectl patch deployment gateway -n openfaas --patch-file gateway-timeouts-patch.yaml
