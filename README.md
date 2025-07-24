@@ -13,7 +13,11 @@ kubectl port-forward svc/gateway -n openfaas 8080:8080
 # get password for ui access
 kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode; echo
 
-# forward grafana to be accessible outside cluster (create external gateway with Nodeport) : admin / admin
+# run grafana inside the cluster
+kubectl -n openfaas run --image=stefanprodan/faas-grafana:4.6.3 --port=3000 grafana
+kubectl -n openfaas expose pod grafana --type=NodePort --name=grafana
+
+# forward grafana to be accessible outside cluster : admin / admin
 kubectl port-forward pod/grafana 3000:3000 -n openfaas
 
 # apply gateway timeouts patch to gateway deployment
