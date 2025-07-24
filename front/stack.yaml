@@ -1,0 +1,10 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+functions:
+  render-front:
+    lang: golang-middleware
+    handler: ./render-front
+    image: zephyr75/render-front:latest
+
