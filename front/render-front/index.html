@@ -3,13 +3,36 @@
 <head>
     <title>Render UI</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .controls { margin-bottom: 20px; }
-        .gallery img { max-width: 150px; margin: 10px; border: 1px solid #ccc; }
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: auto;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        .gallery img {
+            max-width: 150px;
+            margin: 10px;
+            border: 1px solid #ccc;
+        }
+
+        .loading {
+            font-style: italic;
+            color: #555;
+        }
+
+        .error {
+            color: red;
+        }
     </style>
 </head>
 <body>
     <h1>Render Control</h1>
+
     <div class="controls">
         <label>S1X Range: <span id="rangeLabel">40 - 60</span></label><br>
         <input type="range" id="s1xStart" min="20" max="80" value="40" />
@@ -22,7 +45,7 @@
     </div>
 
     <h2>Gallery</h2>
-    <div class="gallery" id="gallery"></div>
+    <div id="gallery" class="gallery"></div>
 
     <script>
         const s1xStartSlider = document.getElementById('s1xStart');
@@ -42,9 +65,9 @@
             const s1xStart = Math.min(parseInt(s1xStartSlider.value), parseInt(s1xEndSlider.value));
             const s1xEnd = Math.max(parseInt(s1xStartSlider.value), parseInt(s1xEndSlider.value));
             const samples = parseInt(document.getElementById('samples').value);
-
             const gallery = document.getElementById('gallery');
-            gallery.innerHTML = '<p>Rendering images...</p>';
+
+            gallery.innerHTML = '<p class="loading">Submitting render job...</p>';
 
             try {
                 const res = await fetch(window.location.href, {
@@ -53,35 +76,54 @@
                     body: JSON.stringify({ s1x_start: s1xStart, s1x_end: s1xEnd, samples })
                 });
 
-                const contentType = res.headers.get("Content-Type") || "";
                 if (!res.ok) {
-                    const errorText = await res.text();
-                    throw new Error(`Server Error: ${res.status} ${errorText}`);
+                    const text = await res.text();
+                    throw new Error(`Failed to start job: ${text}`);
                 }
 
-                if (!contentType.includes("application/json")) {
-                    const raw = await res.text();
-                    throw new Error("Expected JSON response, got:\n" + raw.slice(0, 100));
-                }
-
-                const images = await res.json();
-                gallery.innerHTML = '';
-
-                images.forEach(img => {
-                    const imgEl = document.createElement('img');
-                    imgEl.src = img.img_data;
-                    imgEl.alt = `s1x=${img.s1x}`;
-                    gallery.appendChild(imgEl);
-                });
-
-                if (images.length === 0) {
-                    gallery.innerHTML = "<p>No images received from backend.</p>";
-                }
-
+                const { job } = await res.json();
+                gallery.innerHTML = `<p class="loading">Job submitted: <code>${job}</code><br>Waiting for completion...</p>`;
+                pollJob(job);
             } catch (err) {
-                console.error("Render failed:", err);
-                gallery.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
+                gallery.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+                console.error(err);
             }
+        }
+
+        async function pollJob(jobID) {
+            const gallery = document.getElementById('gallery');
+
+            async function check() {
+                try {
+                    const res = await fetch(`${window.location.href}?job=${jobID}`);
+                    if (!res.ok) throw new Error(`Poll failed: ${res.status}`);
+                    const data = await res.json();
+
+                    if (data.status === "pending") {
+                        gallery.innerHTML = `<p class="loading">Rendering in progress... (Job: ${jobID})</p>`;
+                        setTimeout(check, 3000);
+                    } else if (data.status === "complete") {
+                        gallery.innerHTML = "";
+                        if (!data.images || data.images.length === 0) {
+                            gallery.innerHTML = "<p class='error'>No images returned.</p>";
+                        } else {
+                            data.images.forEach(img => {
+                                const el = document.createElement("img");
+                                el.src = img.img_data;
+                                el.alt = `s1x=${img.s1x}`;
+                                gallery.appendChild(el);
+                            });
+                        }
+                    } else {
+                        gallery.innerHTML = `<p class="error">Unexpected response status: ${data.status}</p>`;
+                    }
+                } catch (err) {
+                    gallery.innerHTML = `<p class="error">Polling error: ${err.message}</p>`;
+                    console.error(err);
+                }
+            }
+
+            check();
         }
 
         updateRangeLabel();
