@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 )
 
 //go:embed index.html
@@ -64,7 +65,10 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 				req.Samples, s1x, s1y, s1z, s2x, s2y, s2z,
 			)
 
-			resp, err := http.Get(url)
+			client := http.Client{
+				Timeout: 10 * time.Minute,
+			}
+			resp, err := client.Get(url)
 			if err != nil || resp.StatusCode != 200 {
 				return
 			}

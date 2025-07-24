@@ -7,4 +7,5 @@ functions:
     lang: golang-middleware
     handler: ./render-front
     image: zephyr75/render-front:latest
-
+    annotations:
+          com.openfaas.timeout: "1000s"
