@@ -1,0 +1,68 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Render UI</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .controls { margin-bottom: 20px; }
+        .gallery img { max-width: 150px; margin: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>Render Control</h1>
+    <div class="controls">
+        <label>S1X Range: <span id="rangeLabel">40 - 60</span></label><br>
+        <input type="range" id="s1xStart" min="20" max="80" value="40" />
+        <input type="range" id="s1xEnd" min="20" max="80" value="60" /><br><br>
+        
+        <label>Samples:</label>
+        <input type="number" id="samples" value="50" min="1" /><br><br>
+
+        <button onclick="renderImages()">Render</button>
+    </div>
+
+    <h2>Gallery</h2>
+    <div class="gallery" id="gallery"></div>
+
+    <script>
+        const s1xStartSlider = document.getElementById('s1xStart');
+        const s1xEndSlider = document.getElementById('s1xEnd');
+        const rangeLabel = document.getElementById('rangeLabel');
+
+        function updateRangeLabel() {
+            const start = parseInt(s1xStartSlider.value);
+            const end = parseInt(s1xEndSlider.value);
+            rangeLabel.textContent = `${Math.min(start, end)} - ${Math.max(start, end)}`;
+        }
+
+        s1xStartSlider.addEventListener('input', updateRangeLabel);
+        s1xEndSlider.addEventListener('input', updateRangeLabel);
+
+        async function renderImages() {
+            const s1xStart = Math.min(parseInt(s1xStartSlider.value), parseInt(s1xEndSlider.value));
+            const s1xEnd = Math.max(parseInt(s1xStartSlider.value), parseInt(s1xEndSlider.value));
+            const samples = parseInt(document.getElementById('samples').value);
+
+            const res = await fetch(window.location.href, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ s1x_start: s1xStart, s1x_end: s1xEnd, samples })
+            });
+
+            const images = await res.json();
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = '';
+
+            images.forEach(img => {
+                const imgEl = document.createElement('img');
+                imgEl.src = img.img_data;
+                imgEl.alt = `s1x=${img.s1x}`;
+                gallery.appendChild(imgEl);
+            });
+        }
+
+        updateRangeLabel();
+    </script>
+</body>
+</html>

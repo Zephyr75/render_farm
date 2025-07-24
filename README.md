@@ -44,4 +44,8 @@ docker run -p 8082:8080 -t zephyr75/render_farm:latest
 # deploy dockerhub image to openfaas
 faas-cli deploy -f stack.yaml
 
+faas-cli build -f stack.yaml
+faas-cli push -f stack.yaml
+faas-cli deploy -f stack.yaml
+
 ```
