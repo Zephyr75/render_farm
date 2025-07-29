@@ -20,6 +20,14 @@ kubectl -n openfaas expose pod grafana --type=NodePort --name=grafana
 # forward grafana to be accessible outside cluster : admin / admin
 kubectl port-forward pod/grafana 3000:3000 -n openfaas
 
+# forward prometheus to be accessible outside cluster : admin / admin
+kubectl port-forward deployment/prometheus 9090:9090 -n openfaas
+# use this query to display all successful invocations
+rate( gateway_function_invocation_total{code="200"} [20s])
+
+# run load testing
+hey -z=30s -q 5 -c 2 -m POST -d=Test http://127.0.0.1:8080/function/go-echo
+
 # apply gateway timeouts patch to gateway deployment
 kubectl patch deployment gateway -n openfaas --patch-file gateway-timeouts-patch.yaml
 
