@@ -16,6 +16,6 @@ functions:
       memory: "1Gi"
       cpu: "1000m"
 
-    labels:
-          com.openfaas.scale.min: "3"
-          com.openfaas.scale.max: "3"
+    # labels:
+    #       com.openfaas.scale.min: "3"
+    #       com.openfaas.scale.max: "3"

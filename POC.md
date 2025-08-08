@@ -30,3 +30,21 @@ connection db extérieure
 
 
 plateformes self service wavestone : joseph deriaux
+nodepool gpu
+qu est ce qui spawn
+hpa?
+kubetl get all voir ce qui spawn
+
+faire schema spawn pour rendu
+schema darchi
+
+---
+
+
+openshift = predefined kubernetes easier but more rigid
+
+faas-netes is the bridge between openfaas and kubernetes, it translates openfaas function deployments into kubernetes resources (services, deployments, ...), communicates with kube's Horizontal Pod Autoscaler to manage function replicas
+
+NATS streaming handles requests while functions are being loaded to allow returning an "accepted" response instantly and processing when available
+
+![](of-workflow.png)
