@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -98,7 +99,7 @@ func renderJob(jobID string, req RenderRequest) {
 
 	for s1x := req.S1XStart; s1x <= req.S1XEnd; s1x++ {
 		url := fmt.Sprintf(
-			"http://render.openfaas-fn:8080/render?samples=%d&s1x=%d&s1y=%d&s1z=%d&s2x=%d&s2y=%d&s2z=%d",
+			os.Getenv("BACK_URL")+"/render?samples=%d&s1x=%d&s1y=%d&s1z=%d&s2x=%d&s2y=%d&s2z=%d",
 			req.Samples, s1x, s1y, s1z, s2x, s2y, s2z,
 		)
 

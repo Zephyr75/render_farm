@@ -56,4 +56,14 @@ faas-cli build -f stack.yaml
 faas-cli push -f stack.yaml
 faas-cli deploy -f stack.yaml
 
+
+# reconnect to openfaas on managed kube with load balancer
+kubectl rollout status -n openfaas deploy/gateway
+
+# reconnect to openfaas on local kube
+kubectl port-forward svc/gateway -n openfaas 8080:8080
+
+# get ip of openfaas on managed kube with load balancer
+kubectl get svc -o wide gateway-external -n openfaas
+
 ```

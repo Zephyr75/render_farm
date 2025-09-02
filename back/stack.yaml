@@ -8,13 +8,13 @@ functions:
       exec_timeout: "1000s"     # hard timeout for function execution
       read_timeout: "1000s"     # allow up to 10m to read the entire request
       write_timeout: "1000s"    # allow up to 10m to write the full response
-      OMP_NUM_THREADS: "4"  # Adjust based on your container resources
-    limits:
-      memory: "2Gi"  # Increase memory for larger renders
-      cpu: "2000m"   # Allocate more CPU cores
-    requests:
-      memory: "1Gi"
-      cpu: "1000m"
+      # OMP_NUM_THREADS: "4"  # Adjust based on your container resources
+    # limits:
+    #   memory: "2Gi"  # Increase memory for larger renders
+    #   cpu: "2000m"   # Allocate more CPU cores
+    # requests:
+    #   memory: "1Gi"
+    #   cpu: "1000m"
 
     # labels:
     #       com.openfaas.scale.min: "3"

@@ -48,3 +48,38 @@ faas-netes is the bridge between openfaas and kubernetes, it translates openfaas
 NATS streaming handles requests while functions are being loaded to allow returning an "accepted" response instantly and processing when available
 
 ![](of-workflow.png)
+
+
+---
+
+fonctionnalite
+cout
+
+config par rapport a lambda
+comp cout aks
+
+securite
+bonnes pratiques integrees?
+
+scanner vuln, patchs vitesse
+
+grip trivi
+est ce quils sont proactifs sur les fix
+
+quest ce quoin peut automatiser
+comment on peut mettre a dispo d'autres equipes
+
+cas d'usage gros workload
+
+facile de faire les deux docker const et faas
+
+estimation cout d'usages
+
+
+support
+contexte
+cas dusge
+resultate
+proj diff cout fonction secu
+implementation ideale recommandee
+

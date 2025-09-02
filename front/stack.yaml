@@ -9,3 +9,5 @@ functions:
     image: zephyr75/render-front:latest
     annotations:
           com.openfaas.timeout: "1000s"
+    environment:
+      BACK_URL: "http://34.55.252.22:8080/function/render"
