@@ -2,9 +2,9 @@ spec:
   template:
     spec:
       containers:
-        - name: faas-netes
-          env:
-            - name: read_timeout
-              value: "1000s"
-            - name: write_timeout
-              value: "1000s"
+      - name: faas-netes
+        env:
+          - name: read_timeout
+            value: "1000s"
+          - name: write_timeout
+            value: "1000s"

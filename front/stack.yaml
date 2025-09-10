@@ -10,4 +10,5 @@ functions:
     annotations:
           com.openfaas.timeout: "1000s"
     environment:
-      BACK_URL: "http://34.55.252.22:8080/function/render"
+      # BACK_URL: "http://34.55.252.22:8080/function/render"
+      BACK_URL: "http://34.133.127.51:8080/function/render"
