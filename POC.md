@@ -84,7 +84,7 @@ proj diff cout fonction secu
 implementation ideale recommandee
 
 
-
+GKE manual
 hey -z=10m http://34.55.252.22:8080/function/render-front
 ^L^[l
 Summary:
@@ -130,7 +130,7 @@ Status code distribution:
 
 ---
 
-
+Cloud Run
 hey -z=10m https://render-front-957318179787.europe-west1.run.app/
 
 Summary:
@@ -177,6 +177,7 @@ Status code distribution:
 
 ---
 
+GKE auto
 hey -z=10m http://34.133.127.51:8080/function/render-front
 
 Summary:
